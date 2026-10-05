@@ -5,13 +5,41 @@
       "label": "build",
       "command": "dotnet",
       "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/src/Catalogue.Web/Catalogue.Web.csproj",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
+      "args": ["build", "${workspaceFolder}/src/Catalogue.Web/Catalogue.Web.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
       "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-gateway",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/src/Catalogue.Gateway/Catalogue.Gateway.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-worker",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/src/Catalogue.Workers/Catalogue.Workers.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "build-tests",
+      "command": "dotnet",
+      "type": "process",
+      "args": ["build", "${workspaceFolder}/tests/Catalogue.UnitTests/Catalogue.UnitTests.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "vite",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web/catalogue-ui" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": { "regexp": "^x^" },
+        "background": { "activeBegins": true, "beginsPattern": "VITE", "endsPattern": "Local:.*5173" }
+      }
     }
   ]
 }

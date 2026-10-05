@@ -10,6 +10,7 @@
       "args": ["--urls", "http://localhost:5080"],
       "cwd": "${workspaceFolder}/src/Catalogue.Web",
       "stopAtEntry": false,
+      "justMyCode": true,
       "serverReadyAction": {
         "action": "openExternally",
         "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
@@ -21,6 +22,80 @@
       "sourceFileMap": {
         "/views": "${workspaceFolder}/Views"
       }
+    },
+    {
+      "name": ".NET: Launch Gateway (YARP :5000)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-gateway",
+      "program": "${workspaceFolder}/src/Catalogue.Gateway/bin/Debug/net10.0/Catalogue.Gateway.dll",
+      "cwd": "${workspaceFolder}/src/Catalogue.Gateway",
+      "env": { "ASPNETCORE_ENVIRONMENT": "Development", "ASPNETCORE_URLS": "http://localhost:5000" },
+      "justMyCode": true
+    },
+    {
+      "name": ".NET: Launch Worker (Service Bus / Event Hub consumers)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-worker",
+      "program": "${workspaceFolder}/src/Catalogue.Workers/bin/Debug/net10.0/Catalogue.Workers.dll",
+      "cwd": "${workspaceFolder}/src/Catalogue.Workers",
+      "env": { "DOTNET_ENVIRONMENT": "Development" },
+      "justMyCode": true
+    },
+    {
+      "name": ".NET: Attach to a running process",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}",
+      "justMyCode": true
+    },
+    {
+      "name": "Vue: Debug SPA in Edge (Vite :5173)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web/catalogue-ui",
+      "preLaunchTask": "vite"
+    },
+    {
+      "name": "Vue: Debug SPA in Chrome (Vite :5173)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web/catalogue-ui",
+      "preLaunchTask": "vite"
+    },
+    {
+      "name": ".NET: Debug unit tests (pick in Test Explorer instead when possible)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-tests",
+      "program": "dotnet",
+      "args": ["test", "${workspaceFolder}/tests/Catalogue.UnitTests", "--no-build", "--filter", "${input:testFilter}"],
+      "cwd": "${workspaceFolder}",
+      "env": { "VSTEST_HOST_DEBUG": "1" },
+      "console": "integratedTerminal"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "testFilter",
+      "type": "promptString",
+      "description": "Test filter, e.g. FullyQualifiedName~MarketplacePricingTests",
+      "default": "FullyQualifiedName~Catalogue.UnitTests"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack: API + Gateway + SPA",
+      "configurations": [".NET: Launch API (Catalogue.Web)", ".NET: Launch Gateway (YARP :5000)", "Vue: Debug SPA in Edge (Vite :5173)"],
+      "stopAll": true
+    },
+    {
+      "name": "API + SPA",
+      "configurations": [".NET: Launch API (Catalogue.Web)", "Vue: Debug SPA in Edge (Vite :5173)"],
+      "stopAll": true
     }
   ]
 }
