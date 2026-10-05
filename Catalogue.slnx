@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Catalogue.Agents/Catalogue.Agents.csproj" />
+    <Project Path="src/Catalogue.Application/Catalogue.Application.csproj" />
+    <Project Path="src/Catalogue.Contracts/Catalogue.Contracts.csproj" />
+    <Project Path="src/Catalogue.Domain/Catalogue.Domain.csproj" />
+    <Project Path="src/Catalogue.Functions/Catalogue.Functions.csproj" />
+    <Project Path="src/Catalogue.Gateway/Catalogue.Gateway.csproj" />
+    <Project Path="src/Catalogue.Infrastructure/Catalogue.Infrastructure.csproj" />
+    <Project Path="src/Catalogue.ServiceDefaults/Catalogue.ServiceDefaults.csproj" />
+    <Project Path="src/Catalogue.Web/Catalogue.Web.csproj" />
+    <Project Path="src/Catalogue.Workers/Catalogue.Workers.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Catalogue.EdiGenerator/Catalogue.EdiGenerator.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Catalogue.UnitTests/Catalogue.UnitTests.csproj" />
+    <Project Path="tests/Catalogue.WorkerTests/Catalogue.WorkerTests.csproj" />
+  </Folder>
+</Solution>

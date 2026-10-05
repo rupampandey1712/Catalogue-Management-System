@@ -1,0 +1,23 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [
+          {
+            "Name": "catalogue-imports",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "DefaultMessageTimeToLive": "PT1H",
+              "MaxDeliveryCount": 5,
+              "EnablePartitioning": false,
+              "RequiresDuplicateDetection": true,
+              "DuplicateDetectionHistoryTimeWindow": "PT5M"
+            }
+          }
+        ]
+      }
+    ],
+    "Logging": { "Type": "File" }
+  }
+}

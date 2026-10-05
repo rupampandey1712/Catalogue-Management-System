@@ -1,0 +1,4 @@
+sku,name,description,category,price,currency,quantity
+HP-10KW-EVO,Heat Pump 10kW EVO,Premium air source heat pump,HVAC,1899.00,GBP,8
+TH-SMART-PRO,Smart Thermostat Pro,WiFi thermostat with app control,CONTROLS,149.99,GBP,60
+BAD-ROW,,Missing name row,HVAC,10,GBP,1

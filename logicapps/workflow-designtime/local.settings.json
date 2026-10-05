@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "APP_KIND": "workflowapp",
+    "ProjectDirectoryPath": "e:\\project\\Catalogue Management System\\logicapps",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet",
+    "FUNCTIONS_INPROC_NET8_ENABLED": "1",
+    "AzureWebJobsSecretStorageType": "Files",
+    "WORKFLOWS_AUTHENTICATION_METHOD": "managedServiceIdentity"
+  }
+}

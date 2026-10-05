@@ -1,0 +1,4 @@
+sku,name,description,category,price,currency,quantity
+HP-12KW-MAX,Heat Pump 12kW MAX,High capacity heat pump,HVAC,2199.00,GBP,6
+TH-SMART-LITE,Smart Thermostat Lite,Entry smart thermostat,CONTROLS,99.99,GBP,80
+BAD-ROW,,Missing name row,HVAC,10,GBP,1

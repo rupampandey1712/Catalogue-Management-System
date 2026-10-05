@@ -1,0 +1,128 @@
+name: catalogue
+
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Catalogue!Dev123"
+    ports: ["1433:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$SA_PASSWORD\" -C -Q 'SELECT 1'"]
+      interval: 10s
+      retries: 12
+      start_period: 20s
+    volumes: ["sqldata:/var/opt/mssql"]
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    ports: ["10000:10000", "10001:10001", "10002:10002"]
+    # Bind-mounted so blobs/queues/tables live in this project folder (.azurite/), not a Docker volume.
+    command: ["azurite", "--blobHost", "0.0.0.0", "--queueHost", "0.0.0.0", "--tableHost", "0.0.0.0", "--location", "/data", "--skipApiVersionCheck"]
+    volumes: ["./.azurite:/data"]
+
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    ports: ["5672:5672"]
+    environment:
+      SQL_SERVER: sql
+      MSSQL_SA_PASSWORD: "Catalogue!Dev123"
+      ACCEPT_EULA: "Y"
+    volumes:
+      - ./infra/servicebus/config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    depends_on:
+      sql: { condition: service_healthy }
+
+  # Event Hubs emulator: hub "catalogue-edi" (8 partitions) for streamed EDI ingestion.
+  # Host ports are shifted (5673/5301) so it can run next to the Service Bus emulator.
+  eventhubs:
+    image: mcr.microsoft.com/azure-messaging/eventhubs-emulator:latest
+    ports: ["5673:5672", "9092:9092", "5301:5300"]
+    environment:
+      BLOB_SERVER: azurite
+      METADATA_SERVER: azurite
+      ACCEPT_EULA: "Y"
+    volumes:
+      - ./infra/eventhubs/config.json:/Eventhubs_Emulator/ConfigFiles/Config.json:ro
+    depends_on: [azurite]
+
+  # Distributed cache (HybridCache L2) shared by every API instance.
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+
+  # OpenTelemetry backend: traces, metrics and structured logs at http://localhost:18888
+  otel-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard:latest
+    ports: ["18888:18888", "4317:18889"]
+    environment:
+      DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS: "true"
+
+  # YARP edge gateway - the public entry point (http://localhost:8000).
+  gateway:
+    build: { context: ., dockerfile: Dockerfile.gateway }
+    ports: ["8000:8080"]
+    environment:
+      ReverseProxy__Clusters__api__Destinations__api-1__Address: "http://api:8080/"
+      ReverseProxy__Clusters__web__Destinations__web-1__Address: "http://web:80/"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-dashboard:18889"
+      Logging__Json: "true"
+    depends_on: [api, web]
+
+  api:
+    build: { context: ., dockerfile: Dockerfile }
+    ports: ["8080:8080"]
+    environment:
+      ConnectionStrings__CatalogueDb: "Server=sql,1433;Database=CatalogueDb;User Id=sa;Password=Catalogue!Dev123;TrustServerCertificate=True"
+      ConnectionStrings__BlobStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+      ConnectionStrings__ServiceBus: "Endpoint=sb://servicebus:5672;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      FileStorage__UseBlob: "true"
+      FileStorage__Container: "catalogue-raw"
+      ServiceBus__Enabled: "true"
+      ServiceBus__QueueName: "catalogue-imports"
+      Worker__InProcess: "false"
+      AllowedOrigins__0: "http://localhost:8081"
+      AllowedOrigins__1: "http://localhost:8000"
+      ConnectionStrings__EventHub: "Endpoint=sb://eventhubs;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      ConnectionStrings__CheckpointStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+      EventHub__Enabled: "true"
+      EventHub__ConsumerInProcess: "true"
+      EventHub__SourceDirectory: "/samples/edi"
+      ConnectionStrings__Redis: "redis:6379"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-dashboard:18889"
+      Logging__Json: "true"
+    volumes:
+      - ./samples/edi:/samples/edi
+    depends_on:
+      sql: { condition: service_healthy }
+      eventhubs: { condition: service_started }
+
+  worker:
+    build: { context: ., dockerfile: Dockerfile.worker }
+    environment:
+      ConnectionStrings__CatalogueDb: "Server=sql,1433;Database=CatalogueDb;User Id=sa;Password=Catalogue!Dev123;TrustServerCertificate=True"
+      ConnectionStrings__BlobStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+      ConnectionStrings__ServiceBus: "Endpoint=sb://servicebus:5672;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      FileStorage__UseBlob: "true"
+      ServiceBus__Enabled: "true"
+      ServiceBus__QueueName: "catalogue-imports"
+      # Set EventHub__ConsumerInProcess=true (and scale: docker compose up --scale worker=3)
+      # to add partition consumers; the processor rebalances ownership across instances.
+      ConnectionStrings__EventHub: "Endpoint=sb://eventhubs;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true"
+      ConnectionStrings__CheckpointStorage: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+      EventHub__Enabled: "true"
+      EventHub__ConsumerInProcess: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-dashboard:18889"
+      Logging__Json: "true"
+    depends_on:
+      sql: { condition: service_healthy }
+      servicebus: { condition: service_started }
+
+  web:
+    build: { context: ./web/catalogue-ui, dockerfile: Dockerfile }
+    ports: ["8081:80"]
+    depends_on: [api]
+
+volumes:
+  sqldata:

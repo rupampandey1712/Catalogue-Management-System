@@ -1,0 +1,4 @@
+{
+  "azurite.location": ".azurite",
+  "azurite.skipApiVersionCheck": true
+}

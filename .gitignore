@@ -1,0 +1,22 @@
+bin/
+obj/
+node_modules/
+dist/
+*.user
+.vs/
+.idea/
+appsettings.Development.json
+catalogue-drop/
+
+# Generated multi-million line EDI interchanges (regenerate with tools/Catalogue.EdiGenerator)
+samples/edi/large/
+samples/edi/generated/
+*.edi.tmp
+logs/
+
+# Local storage (Azurite emulator data + disk fallback) - kept inside the project, never committed
+.azurite/
+.storage/
+__azurite_db_*.json
+__blobstorage__/
+__queuestorage__/

@@ -1,0 +1,100 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "Recurrence": {
+        "type": "Recurrence",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 5
+        }
+      }
+    },
+    "actions": {
+      "Login": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "http://localhost:5080/api/auth/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "admin",
+            "password": "admin123"
+          },
+          "authentication": {
+            "type": "None"
+          }
+        },
+        "runAfter": {}
+      },
+      "List_imports": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "http://localhost:5080/api/imports?pageSize=50",
+          "headers": {
+            "Authorization": "Bearer @{body('Login')?['token']}"
+          },
+          "authentication": {
+            "type": "None"
+          }
+        },
+        "runAfter": {
+          "Login": [
+            "Succeeded"
+          ]
+        }
+      },
+      "For_each_failed_import": {
+        "type": "Foreach",
+        "foreach": "@body('List_imports')",
+        "actions": {
+          "Report_failed_import": {
+            "type": "If",
+            "expression": {
+              "or": [
+                {
+                  "equals": [
+                    "@items('For_each_failed_import')?['status']",
+                    "Failed"
+                  ]
+                },
+                {
+                  "equals": [
+                    "@items('For_each_failed_import')?['status']",
+                    "Rejected"
+                  ]
+                }
+              ]
+            },
+            "actions": {
+              "Get_row_errors": {
+                "type": "Http",
+                "inputs": {
+                  "method": "GET",
+                  "uri": "http://localhost:5080/api/imports/@{items('For_each_failed_import')?['id']}/errors",
+                  "headers": {
+                    "Authorization": "Bearer @{body('Login')?['token']}"
+                  },
+                  "authentication": {
+                    "type": "None"
+                  }
+                },
+                "description": "Fetches row-level errors; in Azure this would post to Teams/Email."
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "List_imports": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  }
+}

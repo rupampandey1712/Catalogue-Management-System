@@ -1,0 +1,85 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "importId": {
+                "type": "integer"
+              },
+              "supplierId": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "importId"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Login": {
+        "type": "Http",
+        "inputs": {
+          "method": "POST",
+          "uri": "http://localhost:5080/api/auth/login",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": {
+            "username": "admin",
+            "password": "admin123"
+          },
+          "authentication": {
+            "type": "None"
+          }
+        },
+        "runAfter": {}
+      },
+      "Get_import_status": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "http://localhost:5080/api/imports/@{triggerBody()?['importId']}",
+          "headers": {
+            "Authorization": "Bearer @{body('Login')?['token']}"
+          },
+          "authentication": {
+            "type": "None"
+          }
+        },
+        "runAfter": {
+          "Login": [
+            "Succeeded"
+          ]
+        }
+      },
+      "Respond": {
+        "type": "Response",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "importId": "@triggerBody()?['importId']",
+            "status": "@body('Get_import_status')?['status']",
+            "processedRows": "@body('Get_import_status')?['processedRows']",
+            "errorRows": "@body('Get_import_status')?['errorRows']",
+            "correlationId": "@body('Get_import_status')?['correlationId']"
+          }
+        },
+        "runAfter": {
+          "Get_import_status": [
+            "Succeeded"
+          ]
+        }
+      }
+    },
+    "outputs": {}
+  }
+}

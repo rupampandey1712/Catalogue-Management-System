@@ -1,0 +1,48 @@
+name: build-test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore -c Release
+
+      - name: Test
+        run: dotnet test --no-build -c Release
+
+      - name: Build frontend
+        working-directory: web/catalogue-ui
+        run: |
+          npm ci
+          npx vue-tsc -b
+          npx vite build
+
+      - name: Validate Logic Apps workflow JSON
+        run: |
+          for f in logicapps/*/workflow.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" || exit 1
+          done
+
+      - name: Build API container
+        run: docker build -t catalogue-api:${{ github.sha }} .
+
+      - name: Build worker container
+        run: docker build -f Dockerfile.worker -t catalogue-worker:${{ github.sha }} .
+
+      - name: Build gateway container
+        run: docker build -f Dockerfile.gateway -t catalogue-gateway:${{ github.sha }} .

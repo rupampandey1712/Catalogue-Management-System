@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "ConnectionStrings__CatalogueDb": "Server=(localdb)\\mssqllocaldb;Database=CatalogueDb;Trusted_Connection=True;TrustServerCertificate=True",
+    "SupplierApis__UseDummyJson": "false",
+    "FileStorage__UseBlob": "true",
+    "ServiceBus__Enabled": "false",
+    "ConnectionStrings__BlobStorage": "UseDevelopmentStorage=true",
+    "Storage__Root": "../../../../../.storage"
+  }
+}
