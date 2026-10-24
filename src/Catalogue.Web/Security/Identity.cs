@@ -42,6 +42,7 @@ public sealed class JwtSettings
 {
     public const string DevKey = "dev-only-signing-key-change-me-0123456789abcdef";
     public required string Issuer { get; init; }
+    public string Audience { get; init; } = "catalogue-api";
     public required byte[] Key { get; init; }
     public TimeSpan AccessTokenLifetime { get; init; } = TimeSpan.FromMinutes(30);
     public TimeSpan RefreshTokenLifetime { get; init; } = TimeSpan.FromDays(7);
@@ -59,6 +60,7 @@ public sealed class JwtSettings
         return new JwtSettings
         {
             Issuer = config["Jwt:Issuer"] ?? "catalogue-dev",
+            Audience = config["Jwt:Audience"] ?? "catalogue-api",
             Key = Encoding.UTF8.GetBytes(key),
             AccessTokenLifetime = TimeSpan.FromMinutes(config.GetValue("Jwt:AccessTokenMinutes", 30)),
             RefreshTokenLifetime = TimeSpan.FromDays(config.GetValue("Jwt:RefreshTokenDays", 7))
@@ -92,7 +94,7 @@ public sealed class TokenService(JwtSettings settings, ICatalogueDbContext db, T
             if (org.SupplierId is { } s) claims.Add(new Claim(AppClaims.SupplierId, s.ToString()));
         }
         var expires = now.Add(settings.AccessTokenLifetime);
-        var token = new JwtSecurityToken(settings.Issuer, audience: null, claims, notBefore: now, expires: expires,
+        var token = new JwtSecurityToken(settings.Issuer, settings.Audience, claims, notBefore: now, expires: expires,
             signingCredentials: new SigningCredentials(new SymmetricSecurityKey(settings.Key), SecurityAlgorithms.HmacSha256));
         return (new JwtSecurityTokenHandler().WriteToken(token), expires);
     }

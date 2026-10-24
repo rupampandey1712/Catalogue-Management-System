@@ -60,9 +60,50 @@ public class MediaTests
     public void Feed_links_to_private_addresses_are_blocked(string ip, bool isPrivate)
         => Assert.Equal(isPrivate, UrlGuard.IsPrivate(IPAddress.Parse(ip)));
 
+    [Theory]
+    [InlineData("100.100.100.200", true)]   // carrier-grade NAT range (Alibaba metadata, many cloud internals)
+    [InlineData("224.0.0.1", true)]
+    [InlineData("::", true)]
+    [InlineData("fd00::1", true)]
+    [InlineData("::ffff:169.254.169.254", true)]
+    [InlineData("2606:4700:4700::1111", false)]
+    public void Less_obvious_internal_ranges_are_blocked(string ip, bool isPrivate)
+        => Assert.Equal(isPrivate, UrlGuard.IsPrivate(IPAddress.Parse(ip)));
+
     [Fact]
     public async Task Non_http_links_are_rejected()
         => Assert.NotNull(await UrlGuard.RejectReasonAsync("file:///etc/passwd", allowPrivate: false, default));
+
+    // The pre-flight check only sees the first URL; the handler must refuse internal targets on every
+    // connection, which is what stops a public URL redirecting (or re-resolving) to an internal host.
+    [Theory]
+    [InlineData("http://127.0.0.1:9/")]
+    [InlineData("http://localhost:9/")]
+    [InlineData("http://169.254.169.254/latest/meta-data/")]
+    public async Task Media_client_refuses_to_connect_to_internal_addresses(string url)
+    {
+        using var client = new HttpClient(UrlGuard.CreateHandler(allowPrivate: false));
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(url));
+        Assert.IsType<BlockedDestinationException>(ex.InnerException);
+    }
+
+    [Fact]
+    public async Task Media_client_allows_internal_addresses_only_when_configured()
+    {
+        using var client = new HttpClient(UrlGuard.CreateHandler(allowPrivate: true)) { Timeout = TimeSpan.FromSeconds(10) };
+        // Nothing listens on port 9 (discard), so the connect itself fails - but not because it was blocked.
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("http://127.0.0.1:9/"));
+        Assert.IsNotType<BlockedDestinationException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void Media_client_does_not_use_a_proxy()
+    {
+        // A proxy would make the connect callback see the proxy's address instead of the real target.
+        using var handler = UrlGuard.CreateHandler(allowPrivate: false);
+        Assert.False(handler.UseProxy);
+        Assert.NotNull(handler.ConnectCallback);
+    }
 
     private sealed class MemoryStorage : IMediaStorage
     {

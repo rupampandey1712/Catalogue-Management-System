@@ -51,6 +51,14 @@
       "justMyCode": true
     },
     {
+      "name": ".NET: Functions host + attach (Durable supplier sync :7072)",
+      "type": "coreclr",
+      "request": "attach",
+      "preLaunchTask": "func: host start",
+      "processId": "${command:pickProcess}",
+      "justMyCode": true
+    },
+    {
       "name": "Vue: Debug SPA in Edge (Vite :5173)",
       "type": "msedge",
       "request": "launch",

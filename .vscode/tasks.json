@@ -30,6 +30,34 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "func: host start",
+      "type": "shell",
+      "command": "func start --port 7072",
+      "options": { "cwd": "${workspaceFolder}/src/Catalogue.Functions" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "func",
+        "pattern": { "regexp": "^x^" },
+        "background": { "activeBegins": true, "beginsPattern": "Azure Functions Core Tools|Determining projects to restore", "endsPattern": "Host lock lease acquired|Worker process started and initialized" }
+      }
+    },
+    {
+      "label": "logicapps: host start",
+      "type": "shell",
+      "command": "${config:azureLogicAppsStandard.funcCoreToolsBinaryPath}",
+      "args": ["host", "start"],
+      "options": {
+        "cwd": "${workspaceFolder}/logicapps",
+        "env": { "PATH": "${config:azureLogicAppsStandard.autoRuntimeDependenciesPath}\\NodeJs;${config:azureLogicAppsStandard.autoRuntimeDependenciesPath}\\DotNetSDK;${env:PATH}" }
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "logicapps",
+        "pattern": { "regexp": "^x^" },
+        "background": { "activeBegins": true, "beginsPattern": "Azure Functions Core Tools", "endsPattern": "Host lock lease acquired|Job host started" }
+      }
+    },
+    {
       "label": "vite",
       "type": "shell",
       "command": "npm run dev",

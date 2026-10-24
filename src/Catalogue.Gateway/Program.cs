@@ -1,7 +1,11 @@
+using System.Security.Claims;
+using System.Text;
 using System.Threading.RateLimiting;
 using Catalogue.Application;
 using Catalogue.ServiceDefaults;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Timeouts;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Yarp.ReverseProxy.Transforms;
 
@@ -26,6 +30,31 @@ builder.Services.AddReverseProxy()
         });
     });
 
+// A bearer token only identifies a user for rate limiting once its signature checks out; otherwise anyone
+// could send a fresh random "token" per request and get a fresh bucket each time. Uses the same Jwt settings
+// as the API. Without a signing key here, every caller is keyed by IP address.
+var jwtKey = builder.Configuration["Jwt:SigningKey"];
+var verifyTokens = !string.IsNullOrWhiteSpace(jwtKey);
+if (verifyTokens)
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(o =>
+        {
+            o.MapInboundClaims = true;
+            o.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "catalogue-dev",
+                ValidateAudience = true,
+                ValidAudience = builder.Configuration["Jwt:Audience"] ?? "catalogue-api",
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromMinutes(1),
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey!))
+            };
+        });
+}
+
 builder.Services.AddRateLimiter(o =>
 {
     o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -42,10 +71,10 @@ builder.Services.AddRateLimiter(o =>
         }, ct);
     };
 
-    // Per client: the bearer token identifies a user; anonymous callers are keyed by IP.
+    // Per client: a verified token identifies a user; everyone else (including invalid tokens) is keyed by IP.
     static string ClientKey(HttpContext ctx) =>
-        ctx.Request.Headers.Authorization.FirstOrDefault() is { Length: > 20 } auth
-            ? "u:" + auth.GetHashCode()
+        ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value is { Length: > 0 } user
+            ? "u:" + user
             : "ip:" + (ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown");
 
     o.AddPolicy("api", ctx => RateLimitPartition.GetSlidingWindowLimiter(ClientKey(ctx), _ => new SlidingWindowRateLimiterOptions
@@ -70,6 +99,7 @@ builder.Services.AddRequestTimeouts(o =>
 var app = builder.Build();
 
 app.UseServiceDefaults();
+if (verifyTokens) app.UseAuthentication(); // only populates HttpContext.User; the API still authorizes
 app.UseRateLimiter();
 app.UseRequestTimeouts();
 

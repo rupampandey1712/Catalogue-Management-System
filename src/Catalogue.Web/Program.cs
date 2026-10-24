@@ -110,7 +110,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuer = true,
             ValidIssuer = jwt.Issuer,
-            ValidateAudience = false,
+            ValidateAudience = true,
+            ValidAudience = jwt.Audience,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
             ValidateIssuerSigningKey = true,
@@ -146,6 +147,25 @@ var app = builder.Build();
 
 app.UseServiceDefaults();
 
+// Baseline headers for a JSON API: no MIME sniffing, no framing, no Referer leakage, and nothing may execute
+// in this origin. Swagger UI (Development) runs its own scripts, and signed media (images, PDFs opened in a
+// tab) must render in the browser's viewers, so both are left out of the CSP.
+app.Use((ctx, next) =>
+{
+    ctx.Response.OnStarting(static state =>
+    {
+        var http = (HttpContext)state;
+        var headers = http.Response.Headers;
+        headers.XContentTypeOptions = "nosniff";
+        headers.XFrameOptions = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        if (!http.Request.Path.StartsWithSegments("/swagger") && !http.Request.Path.StartsWithSegments("/api/media"))
+            headers.ContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
+        return Task.CompletedTask;
+    }, ctx);
+    return next(ctx);
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -162,7 +182,13 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<CatalogueDbContext>();
     await db.SeedAsync();
-    await IdentitySeed.SeedAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>());
+    // The demo users have published, trivially guessable passwords (admin/admin123), so they are only
+    // created in Development unless a deployment opts in explicitly with Seed:DemoUsers=true.
+    if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Seed:DemoUsers"))
+        await IdentitySeed.SeedAsync(db, scope.ServiceProvider.GetRequiredService<IPasswordHasher<AppUser>>());
+    else if (!await db.Users.AnyAsync())
+        app.Logger.LogWarning("No users exist and demo users are not seeded outside Development. " +
+            "Set Seed:DemoUsers=true for a demo deployment, or create the first administrator directly.");
 
     // Recovery sweep: a restart can strand imports mid-processing (in-memory queue loses
     // the message). Mark them failed so they become reprocessable. Streamed imports survive a

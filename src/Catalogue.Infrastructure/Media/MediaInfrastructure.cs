@@ -61,12 +61,52 @@ public static class UrlGuard
         if (IPAddress.IsLoopback(ip)) return true;
         if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
         if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal;
+            return ip.Equals(IPAddress.IPv6Any) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal
+                || ip.IsIPv6Multicast;
         var b = ip.GetAddressBytes();
         return b[0] == 10 || b[0] == 127 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168)
-            || (b[0] == 169 && b[1] == 254) || b[0] == 0;
+            || (b[0] == 169 && b[1] == 254) || b[0] == 0
+            || (b[0] == 100 && b[1] is >= 64 and <= 127)   // carrier-grade NAT (often cloud-internal)
+            || b[0] >= 224;                                 // multicast and reserved
     }
+
+    /// <summary>
+    /// Connect callback for the media HttpClient. The pre-flight check in <see cref="RejectReasonAsync"/>
+    /// only sees the first URL and one DNS answer; this runs on every connection the handler opens, so a
+    /// redirect to an internal host or a DNS answer that changes after the check is refused too.
+    /// </summary>
+    public static Func<SocketsHttpConnectionContext, CancellationToken, ValueTask<Stream>> ConnectCallback(bool allowPrivate) =>
+        async (context, ct) =>
+        {
+            var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, ct);
+            if (addresses.Length == 0) throw new BlockedDestinationException("Host could not be resolved.");
+            if (!allowPrivate && addresses.Any(IsPrivate))
+                throw new BlockedDestinationException("URL points to a private or loopback address.");
+            var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+            try
+            {
+                await socket.ConnectAsync(addresses, context.DnsEndPoint.Port, ct);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        };
+
+    /// <summary>The handler the "media" HttpClient uses: no proxy (it would bypass the callback) and guarded connects.</summary>
+    public static SocketsHttpHandler CreateHandler(bool allowPrivate) => new()
+    {
+        UseProxy = false,
+        AllowAutoRedirect = true,
+        MaxAutomaticRedirections = 5,
+        ConnectCallback = ConnectCallback(allowPrivate)
+    };
 }
+
+/// <summary>A media URL resolved to an address the fetcher may not contact. Never worth retrying.</summary>
+public sealed class BlockedDestinationException(string message) : IOException(message);
 
 /// <summary>
 /// Downloads media referenced by supplier feeds (EDI carries only the link). Polls due requests,
@@ -140,10 +180,22 @@ public sealed class MediaFetchService(IServiceScopeFactory scopes, IHttpClientFa
             request.Failed(ex.Message, permanent: true);
             await db.SaveChangesAsync(ct);
         }
+        catch (Exception ex) when (FindBlocked(ex) is { } blocked)
+        {
+            request.Failed(blocked.Message, permanent: true);
+            await db.SaveChangesAsync(ct);
+        }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             request.Failed(ex.Message, permanent: !TransientFaults.IsTransient(ex));
             await db.SaveChangesAsync(ct);
         }
+    }
+
+    private static BlockedDestinationException? FindBlocked(Exception? ex)
+    {
+        for (; ex is not null; ex = ex.InnerException)
+            if (ex is BlockedDestinationException blocked) return blocked;
+        return null;
     }
 }

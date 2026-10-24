@@ -47,7 +47,8 @@ public static class DependencyInjection
         {
             c.Timeout = TimeSpan.FromSeconds(90);
             c.DefaultRequestHeaders.UserAgent.ParseAdd("CatalogueMediaFetcher/1.0");
-        });
+        }).ConfigurePrimaryHttpMessageHandler(() =>
+            Media.UrlGuard.CreateHandler(config.GetValue<bool>("Media:AllowPrivateNetworks")));
 
         // Queue: in-memory channel locally, Service Bus (or the SB emulator) when configured.
         services.AddSingleton<IImportQueue>(sp =>

@@ -19,8 +19,14 @@ namespace Catalogue.Functions;
 ///  - Each activity gets an automatic retry policy (exponential backoff) for flaky
 ///    supplier APIs, without hand-rolled retry loops.
 ///  - Scheduled (timer) client + on-demand HTTP client share the same orchestration.
+///
+/// Services come in through the constructor: the isolated worker only binds trigger/binding
+/// parameters on function methods, so a service parameter there would always be null.
 /// </summary>
-public static class SupplierSyncFunctions
+public sealed class SupplierSyncFunctions(
+    CatalogueDbContextFactory dbFactory,
+    SupplierClientResolver clients,
+    ILogger<SupplierSyncFunctions> logger)
 {
     private static readonly TaskOptions RetryPolicy = new(new RetryPolicy(
         maxNumberOfAttempts: 3,
@@ -114,8 +120,7 @@ public static class SupplierSyncFunctions
     // ---------- Activities ----------
 
     [Function(nameof(GetRestSuppliersActivity))]
-    public static async Task<List<SupplierRef>> GetRestSuppliersActivity(
-        [ActivityTrigger] object? input, CatalogueDbContextFactory dbFactory)
+    public async Task<List<SupplierRef>> GetRestSuppliersActivity([ActivityTrigger] object? input)
     {
         try
         {
@@ -132,10 +137,7 @@ public static class SupplierSyncFunctions
     }
 
     [Function(nameof(FetchSupplierProductsActivity))]
-    public static async Task<IReadOnlyList<SupplierProductDto>> FetchSupplierProductsActivity(
-        [ActivityTrigger] SupplierRef supplier,
-        SupplierClientResolver clients,
-        ILogger<SupplierSyncFunctionsMarker> logger)
+    public async Task<IReadOnlyList<SupplierProductDto>> FetchSupplierProductsActivity([ActivityTrigger] SupplierRef supplier)
     {
         logger.LogInformation("Fetching products from supplier {SupplierCode}.", supplier.Code);
         var client = clients.Resolve();
@@ -143,9 +145,7 @@ public static class SupplierSyncFunctions
     }
 
     [Function(nameof(UpsertChunkActivity))]
-    public static async Task<int> UpsertChunkActivity(
-        [ActivityTrigger] UpsertChunkRequest request,
-        CatalogueDbContextFactory dbFactory)
+    public async Task<int> UpsertChunkActivity([ActivityTrigger] UpsertChunkRequest request)
     {
         await using var db = dbFactory.Create();
         var existing = await db.Products
@@ -197,8 +197,7 @@ public static class SupplierSyncFunctions
     }
 
     [Function(nameof(AuditSyncActivity))]
-    public static async Task AuditSyncActivity(
-        [ActivityTrigger] SyncSummary summary, CatalogueDbContextFactory dbFactory)
+    public async Task AuditSyncActivity([ActivityTrigger] SyncSummary summary)
     {
         await using var db = dbFactory.Create();
         db.AuditEvents.Add(new AuditEvent("durable-functions", "SupplierSyncCompleted", "Sync", "all",
@@ -212,6 +211,3 @@ public static class SupplierSyncFunctions
     public sealed record SupplierSyncResult(string SupplierCode, int Fetched, int Upserted, int Errors);
     public sealed record SyncSummary(int Suppliers, int Fetched, int Upserted, int Errors);
 }
-
-// Marker used only for a typed ILogger.
-public sealed class SupplierSyncFunctionsMarker { }
